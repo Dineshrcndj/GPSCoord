@@ -3,7 +3,9 @@ from geopy.distance import geodesic
 import mysql.connector
 
 app = Flask(__name__)
-
+global submit_radius, fetch_radius
+submit_radius=150
+fetch_radius=5000
 def get_db_connection():
     return mysql.connector.connect(user="root", password="admin", host="localhost", database="city_data")
 
@@ -11,7 +13,8 @@ def fetch_nearby_centers_submissions(lat, lon, radius_meters):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     query = """
-        SELECT area_name, center_name, lat, lon
+
+        SELECT area_name, center_name, lat, lon, submitted_at
         FROM submissions
         WHERE ST_Distance_Sphere(POINT(lon, lat), POINT(%s, %s)) <= %s
     """
@@ -65,6 +68,25 @@ def fetch_submissions():
 
 @app.route("/")
 def dashboard():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Delete submissions older than 2 hours
+    cursor.execute("""
+        DELETE FROM submissions 
+        WHERE submitted_at < NOW() - INTERVAL 2 HOUR
+    """)
+    conn.commit()
+    
+    # Fetch remaining submissions
+    cursor.execute("""
+        SELECT * FROM submissions 
+        ORDER BY submitted_at DESC
+    """)
+    results = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
     return render_template("dashboard.html")
 
 @app.route("/static/styles.css")
@@ -95,7 +117,7 @@ def get_nearby_centers():
     data = request.json
     lat, lon = data['lat'], data['lon']
     print(f'{lat=},{lon=}')
-    centers = fetch_nearby_centers_submissions(lat, lon, 2000)
+    centers = fetch_nearby_centers_submissions(lat, lon, fetch_radius)
     for center in centers:
         center['distance'] = round(geodesic((lat, lon), (center['lat'], center['lon'])).meters, 2)
     return jsonify(centers)
@@ -104,7 +126,7 @@ def get_nearby_centers():
 def get_addable_locations():
     data = request.json
     lat, lon = data['lat'], data['lon']
-    centers = fetch_nearby_centers(lat, lon, 300)
+    centers = fetch_nearby_centers(lat, lon, submit_radius)
     for center in centers:
         center['distance'] = round(geodesic((lat, lon), (center['lat'], center['lon'])).meters, 2)
     return jsonify(centers)
@@ -120,5 +142,4 @@ def get_submissions():
     return jsonify(fetch_submissions())
 
 if __name__ == "__main__":
-
     app.run(debug=True)
