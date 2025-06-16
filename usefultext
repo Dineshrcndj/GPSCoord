@@ -1,0 +1,3 @@
+mysqldump --no-tablespaces -h jukerberg.mysql.pythonanywhere-services.com -u jukerberg -p 'jukerberg$default' > city_data2.sql
+dexpxi5dzb@qejjyl.com
+Abcd@1234
